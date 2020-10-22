@@ -3,3 +3,5 @@ repositories
 gherkin-github-projects.csv
 venv-x
 .idea
+*-info/
+.eggs/
