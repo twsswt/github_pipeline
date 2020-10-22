@@ -9,9 +9,9 @@ logging.basicConfig(level=logging.INFO)
 os.environ['GITHUB_API_TOKEN'] = ''
 
 logging.info("Checking cache...")
-logging.info("[%d] cached repositories.", len(repository_status_cache('pipeline-1-stage-1-repositories.db')))
+logging.info("[%d] cached repositories.", len(repository_status_cache('repositories.db')))
 
-logging.info("Sampling repository IDs randomly...")
+logging.info("Sampling repository IDs randomly and filtering for Java language presence.")
 
 
 def java_filter(repository):
