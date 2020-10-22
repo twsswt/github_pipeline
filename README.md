@@ -1,3 +1,4 @@
 # Github Pipeline
 
-Code for gathering data sets of Github repositories.
+A pipeline architecture for gathering and analysing data sets of Github 
+repositories, with integrated GitHub API rate limiting.
