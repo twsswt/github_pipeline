@@ -1,0 +1,2 @@
+include github-pipeline/man/VERSION
+include README.md
