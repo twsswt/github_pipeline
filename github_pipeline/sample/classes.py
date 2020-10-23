@@ -5,15 +5,9 @@ import random
 from github import GithubException
 
 from github_pipeline.api_wrapper import rate_limited_github_instance
-from github_pipeline.export import SqliteTable
+
 
 logger = logging.getLogger(__name__)
-
-
-class GithubRepositoryCache(SqliteTable):
-
-    def __init__(self, database_file_path):
-        super().__init__(database_file_path, "RepositoryCache", ['repository_id INT', 'status TEXT'], ['repository_id'])
 
 
 class _RepositoryIterator:

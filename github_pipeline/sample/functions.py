@@ -1,17 +1,22 @@
 from github import GithubException
 
-from .classes import CachedGithubRepositories, GithubRepositoryCache,\
-    FilteredGithubRepositories, ReplaceGithubRepositories, SampledGithubRepositories, SearchGithubRepositories, \
-    WriteToCacheGithubRepositories
+from github_pipeline.export import create_sql_table, create_sql_table_descriptor
+
+from .classes import CachedGithubRepositories, FilteredGithubRepositories, ReplaceGithubRepositories, \
+    SampledGithubRepositories, SearchGithubRepositories, WriteToCacheGithubRepositories
 
 
 _repository_caches = dict()
 
 
+cache_table_descriptor = \
+    create_sql_table_descriptor('RepositoryCache', ['repository_id INT', 'status TEXT'], ['repository_id'])
+
+
 def repository_status_cache(cache_file_path='repository_cache.db'):
     global _repository_caches
     if cache_file_path not in _repository_caches:
-        _repository_caches[cache_file_path] = GithubRepositoryCache(cache_file_path)
+        _repository_caches[cache_file_path] = create_sql_table(cache_file_path, cache_table_descriptor)
     return _repository_caches[cache_file_path]
 
 

@@ -22,7 +22,7 @@ from clonkin.gherkin.project import reporter as project_reporter
 from github_pipeline.sample.classes import AbstractGithubRepositories
 from .git_view import GitAtCommit, get_commits_on_branch
 
-from github_pipeline.export import SqliteTable
+from github_pipeline.export import create_sql_table, create_sql_table_descriptor
 
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,41 @@ def _feature_files_are_in_change_set(commit):
     return False
 
 
+clonkin_analysis_table_descriptor = create_sql_table_descriptor(
+    table_name="ClonkinAnalysisGitHubRepositories",
+    columns=[
+        "repository_id INT",
+        "commit_hexsha TEXT",
+        "commit_date INT",
+
+        "lines_count INT",
+
+        "gherkin_files_count INT",
+        "unparsed_files_count INT",
+        "empty_files_count INT",
+
+        "features_count INT",
+        "scenarios_count INT",
+        "backgrounds_count INT",
+
+        "given_count INT",
+        "when_count INT",
+        "then_count INT",
+        "steps_count INT",
+
+        "clones_count INT",
+        "clone_lines_count INT",
+        "clone_rate REAL",
+
+        "aaa_violations_count INT",
+
+        "lazy_outlines_table_count INT",
+        "lazy_step_examples_count INT"
+    ],
+    primary_keys=['repository_id', 'commit_hexsha'],
+)
+
+
 class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
 
     def __init__(self,
@@ -122,39 +157,7 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
         self.source_iter = iter(source_repositories)
         self.local_repositories_path = local_repositories_path
 
-        table_name = "ClonkinAnalysisGitHubRepositories"
-        fields = [
-            "repository_id INT",
-            "commit_hexsha TEXT",
-            "commit_date INT",
-
-            "lines_count INT",
-
-            "gherkin_files_count INT",
-            "unparsed_files_count INT",
-            "empty_files_count INT",
-
-            "features_count INT",
-            "scenarios_count INT",
-            "backgrounds_count INT",
-
-            "given_count INT",
-            "when_count INT",
-            "then_count INT",
-            "steps_count INT",
-
-            "clones_count INT",
-            "clone_lines_count INT",
-            "clone_rate REAL",
-
-            "aaa_violations_count INT",
-
-            "lazy_outlines_table_count INT",
-            "lazy_step_examples_count INT"
-        ]
-        primary_keys = ['repository_id', 'commit_hexsha']
-
-        self.database_table = SqliteTable(database_path, table_name, fields, primary_keys)
+        self.database_table = create_sql_table(database_path, clonkin_analysis_table_descriptor)
 
         self._gherkin_reporters = [
             project_reporter(),
@@ -235,6 +238,33 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
         return total_lines,
 
 
+repository_meta_data_table_descriptor = create_sql_table_descriptor(
+    table_name='GitHubRepositoryMetaData',
+    columns=[
+        'repository_id INT',
+        'name TEXT',
+        'url TEXT',
+
+        'main_language TEXT',
+        'total_bytes INT',
+
+        'total_contributors INT',
+
+        'last_commit_hexsha TEXT',
+        'total_commits INT',
+        'first_commit_date INT',
+        'last_commit_date INT',
+
+        'total_issues INT',
+        'open_issues INT',
+        'closed_issues INT',
+        'all_pull_requests INT',
+        'open_pull_requests INT',
+        'closed_pull_requests INT'],
+    primary_keys=['repository_id']
+)
+
+
 class ExportGitHubRepositoryMetaData(AbstractGithubRepositories):
 
     def __init__(self, source_repositories, local_repositories_path, database_path):
@@ -242,32 +272,7 @@ class ExportGitHubRepositoryMetaData(AbstractGithubRepositories):
         self.source_iter = iter(source_repositories)
         self.local_repositories_path = local_repositories_path
 
-        table_name = 'GitHubRepositoryMetaData'
-        fields = [
-            'repository_id INT',
-            'name TEXT',
-            'url TEXT',
-
-            'main_language TEXT',
-            'total_bytes INT',
-
-            'total_contributors INT',
-
-            'last_commit_hexsha TEXT',
-            'total_commits INT',
-            'first_commit_date INT',
-            'last_commit_date INT',
-
-            'total_issues INT',
-            'open_issues INT',
-            'closed_issues INT',
-            'all_pull_requests INT',
-            'open_pull_requests INT',
-            'closed_pull_requests INT']
-
-        primary_keys = ['repository_id']
-
-        self.database_table = SqliteTable(database_path, table_name, fields, primary_keys)
+        self.database_table = create_sql_table(database_path, repository_meta_data_table_descriptor)
 
     def _get_next_repository(self):
         next_repository = next(self.source_iter)
