@@ -20,6 +20,7 @@ class _SqliteContextManager:
 
     def __enter__(self):
         self.connection = sqlite3.connect(self._database_file_path)
+        self.connection.row_factory = sqlite3.Row
         cursor = self.connection.cursor()
 
         query = \
