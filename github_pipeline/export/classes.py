@@ -7,9 +7,9 @@ from dataclasses import dataclass
 class SqliteTableDescriptor:
 
     def __init__(self, table_name, columns, primary_keys):
-        self._table_name = table_name
-        self._columns = columns
-        self._primary_keys = primary_keys
+        self.table_name = table_name
+        self.columns = columns
+        self.primary_keys = primary_keys
 
 
 class _SqliteContextManager:
@@ -139,3 +139,21 @@ class SqliteTable:
                 '''
             )
             return [t for t in cursor.execute(query_string).fetchall()]
+
+    class _SqliteTableIterator:
+
+        def __init__(self, sqlite_table):
+            self._sqlite_table = sqlite_table
+            self._keys = self._sqlite_table.keys()
+            self._index = 0
+
+        def __next__(self):
+            if self._index >= len(self._keys):
+                raise StopIteration
+            else:
+                next_key = self._keys[self._index]
+                self._index += 1
+                return next_key
+
+    def __iter__(self):
+        return self._SqliteTableIterator(self)
