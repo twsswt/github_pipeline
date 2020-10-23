@@ -1,3 +1,4 @@
+clonkin
 PyGithub
 git-python
 pygount
