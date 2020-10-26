@@ -1,4 +1,5 @@
 import logging
+import os
 
 from pathlib import Path
 
@@ -100,8 +101,7 @@ def _get_files_changed_in_commit(commit):
     return result
 
 
-def _feature_files_are_in_change_set(commit):
-    changed_file_paths = _get_files_changed_in_commit(commit)
+def _feature_files_are_in_change_set(changed_file_paths):
     for file_path in changed_file_paths:
         if file_path.endswith('.feature'):
             return True
@@ -141,6 +141,59 @@ clonkin_analysis_table_descriptor = create_sql_table_descriptor(
     ],
     primary_keys=['repository_id', 'commit_hexsha'],
 )
+
+
+class _CachingPygountAnalyser:
+
+    def __init__(self, local_repository_path):
+        self._local_repository_path = local_repository_path
+        self.current_file_line_count = dict()
+
+    def perform_analysis(self, changed_repository_paths):
+
+        logger.info("Starting pygount analysis on [%d] source paths in [%s].",
+                    len(changed_repository_paths), self._local_repository_path)
+
+        for changed_repository_path in changed_repository_paths:
+            file_path = self._local_repository_path + os.sep + changed_repository_path
+
+            if file_path.is_file() and 'src-min' not in str(file_path):
+                pygcount_project_summary = ProjectSummary()
+                source_analysis = SourceAnalysis.from_file(str(file_path), '')
+                pygcount_project_summary.add(source_analysis)
+                self.current_file_line_count[file_path] = pygcount_project_summary.total_code_count
+            else:
+                self.current_file_line_count[file_path] = 0
+
+        return sum(self.current_file_line_count.values()),
+
+
+class _CachingClonkinAnalyser:
+
+    def __init__(self, local_repository_path, gherkin_reporters, brute_clonkin):
+        self._local_repository_path = local_repository_path
+        self._gherkin_reporters = gherkin_reporters
+        self._last_clonkin_values = (0, ) * 16
+        self._brute_clonkin = brute_clonkin
+
+    def perform_analysis(self, changed_repository_paths):
+        if _feature_files_are_in_change_set(changed_repository_paths) or self._brute_clonkin:
+
+            logger.info("Starting clonkin analysis on [%s].", self._local_repository_path)
+            feature_file_paths = list(Path(self._local_repository_path).rglob("*.feature"))
+            gherkin_project = gherkin_project_from_paths(feature_file_paths)
+
+            for reporter in self._gherkin_reporters:
+                gherkin_project.add_report(reporter, False)
+
+            result = list()
+            for smell_report in gherkin_project.reports:
+                for value in smell_report.project_report_values():
+                    result.append(value)
+
+            self._last_clonkin_values = tuple(result)
+
+        return self._last_clonkin_values
 
 
 class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
@@ -189,53 +242,23 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
 
         progress_tracker = ProgressTracker(len(commits), object_type_name='commits')
 
-        last_clonkin_values = (0, ) * 16
+        clonkin_analyser = _CachingClonkinAnalyser(local_repository_path, self._gherkin_reporters, self.brute_clonkin)
+        caching_pygount_analyser = _CachingPygountAnalyser(local_repository_path)
 
         for commit in reversed(commits):
             if (next_repository.id, commit.hexsha) not in self.database_table:
 
+                changed_file_paths = _get_files_changed_in_commit(commit)
                 logger.info("Checking out commit [%s]" % commit.hexsha)
                 with GitAtCommit(git_repository, commit):
                     data_values = (commit.authored_date, )
-                    data_values += self._perform_pygount_analysis(local_repository_path)
-                    if _feature_files_are_in_change_set(commit) or self.brute_clonkin:
-                        last_clonkin_values = self._perform_clonkin_analysis(local_repository_path)
-                    data_values += last_clonkin_values
+
+                    data_values += caching_pygount_analyser.perform_analysis(changed_file_paths)
+                    data_values += clonkin_analyser.perform_analysis(changed_file_paths)
 
                 self.database_table[(next_repository.id, commit.hexsha)] = data_values
 
             progress_tracker.processed_object()
-
-    def _perform_clonkin_analysis(self, local_repository_path):
-        logger.info("Starting clonkin analysis on [%s].", local_repository_path)
-        feature_file_paths = list(Path(local_repository_path).rglob("*.feature"))
-        gherkin_project = gherkin_project_from_paths(feature_file_paths)
-
-        for reporter in self._gherkin_reporters:
-            gherkin_project.add_report(reporter, False)
-
-        result = list()
-        for smell_report in gherkin_project.reports:
-            for value in smell_report.project_report_values():
-                result.append(value)
-
-        return tuple(result)
-
-    def _perform_pygount_analysis(self, local_repository_path):
-        pygcount_project_summary = ProjectSummary()
-
-        source_paths = list(Path(local_repository_path).rglob("*"))
-
-        logger.info("Starting pygount analysis on [%d] source paths in [%s].",
-                    len(source_paths), local_repository_path)
-
-        for source_path in source_paths:
-            if source_path.is_file() and 'src-min' not in str(source_path):
-                source_analysis = SourceAnalysis.from_file(str(source_path), '')
-                pygcount_project_summary.add(source_analysis)
-
-        total_lines = pygcount_project_summary.total_code_count
-        return total_lines,
 
 
 repository_meta_data_table_descriptor = create_sql_table_descriptor(

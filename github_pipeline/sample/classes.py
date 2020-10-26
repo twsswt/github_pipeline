@@ -189,9 +189,11 @@ class ReplaceGithubRepositories(AbstractGithubRepositories):
 
     def _get_next_repository(self):
         next_repository = next(self.source_iter)
+        logger.debug("Looking for matching replacement fork for [%d] [%s].",
+                     next_repository.id, next_repository.git_url)
 
         replacement = self.repo_replacer(next_repository)
-        logger.debug("Replacing [%d] with ultimate parent [%d].", next_repository.id, replacement.id)
+        logger.debug("Replacing [%d] with [%d].", next_repository.id, replacement.id)
 
         return replacement
 

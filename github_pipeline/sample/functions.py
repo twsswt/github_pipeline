@@ -1,4 +1,4 @@
-from github import GithubException
+from github import GithubException, Repository
 
 from github_pipeline.export import create_sql_table, create_sql_table_descriptor
 
@@ -71,6 +71,26 @@ def replace_forks_with_parents(repositories):
         return repository
 
     return ReplaceGithubRepositories(repositories, replace_fork_repository_with_original)
+
+
+def replace_parents_with_forks(repositories, condition=lambda repository: True):
+
+    def find_matching_fork(repository: Repository):
+        if repository.forks:
+            try:
+                for fork in repository.get_forks():
+                    if condition(fork):
+                        return fork
+                    else:
+                        fork_result = find_matching_fork(fork)
+                        if fork_result:
+                            return fork_result
+            except GithubException:
+                pass
+
+        return None
+
+    return ReplaceGithubRepositories(repositories, find_matching_fork)
 
 
 def filter_for_real_projects(repositories):
