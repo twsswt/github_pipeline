@@ -151,19 +151,23 @@ class _CachingPygountAnalyser:
 
     def perform_analysis(self, changed_repository_paths):
 
+        new_paths = set(Path(self._local_repository_path).rglob("*")) - set(self.current_file_line_count.keys())
+        logging.debug("Found [%d] new paths", len(new_paths))
+        changed_paths = set(Path(self._local_repository_path + os.sep + path) for path in changed_repository_paths)
+        paths_to_analyse = new_paths | changed_paths
+
         logger.info("Starting pygount analysis on [%d] source paths in [%s].",
-                    len(changed_repository_paths), self._local_repository_path)
+                    len(paths_to_analyse), self._local_repository_path)
 
-        for changed_repository_path in changed_repository_paths:
-            file_path = self._local_repository_path + os.sep + changed_repository_path
+        for path_to_analyse in paths_to_analyse:
 
-            if file_path.is_file() and 'src-min' not in str(file_path):
+            if path_to_analyse.is_file() and 'src-min' not in str(path_to_analyse):
                 pygcount_project_summary = ProjectSummary()
-                source_analysis = SourceAnalysis.from_file(str(file_path), '')
+                source_analysis = SourceAnalysis.from_file(str(path_to_analyse), '')
                 pygcount_project_summary.add(source_analysis)
-                self.current_file_line_count[file_path] = pygcount_project_summary.total_code_count
+                self.current_file_line_count[path_to_analyse] = pygcount_project_summary.total_code_count
             else:
-                self.current_file_line_count[file_path] = 0
+                self.current_file_line_count[path_to_analyse] = 0
 
         return sum(self.current_file_line_count.values()),
 
@@ -177,6 +181,7 @@ class _CachingClonkinAnalyser:
         self._brute_clonkin = brute_clonkin
 
     def perform_analysis(self, changed_repository_paths):
+
         if _feature_files_are_in_change_set(changed_repository_paths) or self._brute_clonkin:
 
             logger.info("Starting clonkin analysis on [%s].", self._local_repository_path)
@@ -249,7 +254,7 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
             if (next_repository.id, commit.hexsha) not in self.database_table:
 
                 changed_file_paths = _get_files_changed_in_commit(commit)
-                logger.info("Checking out commit [%s]" % commit.hexsha)
+                logger.info("Checking out commit [%s]." % commit.hexsha)
                 with GitAtCommit(git_repository, commit):
                     data_values = (commit.authored_date, )
 
