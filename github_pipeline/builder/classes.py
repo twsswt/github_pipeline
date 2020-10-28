@@ -3,7 +3,8 @@ from github import GithubException, Repository
 from github_pipeline.sample import FilteredGithubRepositories, ReplaceGithubRepositories, \
     WriteToCacheGithubRepositories, repository_status_cache
 
-from github_pipeline.analyse import CloneOrPullGithubRepositories, ExportGitHubRepositoryMetaData
+from github_pipeline.analyse import CloneOrPullGithubRepositories, ExportGitHubRepositoryMetaData, \
+    ClonkinAnalysisGithubRepositories
 
 
 class PipelineBuilder:
@@ -24,7 +25,7 @@ class PipelineBuilder:
 
     def clone_or_pull(self, local_repositories_path='repositories'):
         self._source = CloneOrPullGithubRepositories(self._source, local_repositories_path)
-        return self._source
+        return self
 
     def export_github_repository_metadata(
         self,
