@@ -123,7 +123,7 @@ class SampledGithubRepositories(AbstractGithubRepositories):
 
             repository_id = self._random.randint(0, self.max_repository_id)
             cache_key = repository_id
-            if cache_key not in self.repository_cache or self.repository_cache[cache_key] == 'Match':
+            if cache_key not in self.repository_cache or self.repository_cache[cache_key]['status'] == 'Match':
 
                 logger.debug("Retrieving repository [%d] ...", repository_id)
                 try:
@@ -135,7 +135,7 @@ class SampledGithubRepositories(AbstractGithubRepositories):
                     self.repository_cache[cache_key] = 'Not_Found'
                     logger.debug("...not found.")
             else:
-                reason = self.repository_cache[cache_key]
+                reason = self.repository_cache[cache_key]['status']
                 logger.debug('Skipping repository [%d] as [%s].', repository_id, reason)
 
         return None
@@ -165,7 +165,7 @@ class FilteredGithubRepositories(AbstractGithubRepositories):
 
                 self.repository_cache[cache_key] = 'Match' if _match else 'No_Match'
 
-            return self.repository_cache[cache_key] == 'Match'
+            return self.repository_cache[cache_key]['status'] == 'Match'
         else:
             return self.repo_filter(repository)
 

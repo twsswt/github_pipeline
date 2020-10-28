@@ -109,12 +109,13 @@ class SqliteTable:
 
     def __setitem__(self, item, values):
         _item = (item, ) if not isinstance(item, tuple) else item
+        _values = (values, ) if not isinstance(values, tuple) else values
 
         with self._create_sqlite_connection() as connection:
 
             cursor = connection.cursor()
 
-            question_marks = ','.join(['?'] * (len(_item) + len(values)))
+            question_marks = ','.join(['?'] * (len(_item) + len(_values)))
 
             query_string = (
                 f'''
@@ -125,7 +126,7 @@ class SqliteTable:
 
                 '''
             )
-            cursor.execute(query_string, _item + values)
+            cursor.execute(query_string, _item + _values)
             connection.commit()
 
     def keys(self):

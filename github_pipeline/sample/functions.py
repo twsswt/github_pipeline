@@ -38,17 +38,9 @@ def cached_repositories(cache_file_path='repository_cache.db', repository_ids=No
     return cached_github_repositories
 
 
-def filter_repositories(repositories, filter):
-    return FilteredGithubRepositories(repositories, filter, repository_status_cache())
+def filter_repositories(repositories, filter, cache_file_path='repository_cache.db'):
+    return FilteredGithubRepositories(repositories, filter, repository_status_cache(cache_file_path))
 
-
-def filter_for_gherkin_projects(repositories):
-
-    def gherkin_filter(repository):
-        languages = repository.get_languages()
-        return 'Gherkin' in languages
-
-    return filter_repositories(repositories, gherkin_filter)
 
 
 def filter_for_duplicates(repositories):
