@@ -10,8 +10,12 @@ class PipelineBuilder:
     def __init__(self, source):
         self._source = source
 
-    def filter_repositories(self, repository_filter):
-        self._source = FilteredGithubRepositories(self._source, repository_filter)
+    def filter_repositories(self, repository_filter, cache_file_path=None):
+        if cache_file_path is None:
+            self._source = FilteredGithubRepositories(self._source, repository_filter)
+        else:
+            github_repository_cache = repository_status_cache(cache_file_path)
+            self._source = FilteredGithubRepositories(self._source, repository_filter, repository_status_cache())
         return self
 
     def replace_repositories(self, replacer):
