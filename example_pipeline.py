@@ -1,7 +1,8 @@
 import logging
 import os
 
-from github_pipeline.sample import filter_repositories, repository_status_cache, sample_repositories
+from github_pipeline.builder import sample_repositories
+from github_pipeline.sample import repository_status_cache
 
 logging.basicConfig(level=logging.INFO)
 
@@ -14,16 +15,6 @@ logging.info("[%d] cached repositories.", len(repository_status_cache('repositor
 logging.info("Sampling repository IDs randomly and filtering for Java language presence.")
 
 
-def java_filter(repository):
-    languages = repository.get_languages()
-    return 'Java' in languages
-
-
-sample_pipeline = filter_repositories(
-    sample_repositories('repositories.db', sample_size=1000),
-    java_filter
-)
-
-
-for _ in sample_pipeline:
-    pass
+sample_repositories('repositories.db', sample_size=100)\
+    .filter_repositories(lambda repository: 'Java' in repository.get_languages())\
+    .execute()
