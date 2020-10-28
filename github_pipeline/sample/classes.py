@@ -72,12 +72,17 @@ class CachedGithubRepositories(AbstractGithubRepositories):
         try:
             while True:
                 repository_id = self.repository_ids[self.index]
-                try:
-                    return self.github_instance.get_repo(repository_id)
-                except GithubException:
-                    logger.warning("Couldn't retrieve cached repository [%d].", repository_id, exc_info=True)
-                finally:
-                    self.index += 1
+                if self.repository_cache[repository_id]['status'] == 'Match':
+                    try:
+                        return self.github_instance.get_repo(repository_id)
+                    except GithubException:
+                        logger.warning("Couldn't retrieve cached repository [%d].", repository_id, exc_info=True)
+
+                else:
+                    reason = self.repository_cache[repository_id]['status']
+                    logger.debug("Skipping repository [%d], due to [%s].", repository_id, reason)
+                self.index += 1
+
 
         except IndexError:
             logger.warning("No more repositories in cache.")
@@ -207,5 +212,5 @@ class WriteToCacheGithubRepositories(AbstractGithubRepositories):
 
     def _get_next_repository(self):
         next_repository = next(self.source_iter)
-        self.repository_cache[str(next_repository.id)] = 'MATCH'
+        self.repository_cache[str(next_repository.id)] = 'Match'
         return next_repository
