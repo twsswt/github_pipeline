@@ -79,7 +79,7 @@ class PipelineBuilder:
     def replace_parents_with_fork(self, condition=lambda repository: True):
 
         def find_matching_fork(repository: Repository):
-
+            logger.debug("Looking for fork of repository [%d] [%s].", repository.id, repository.git_url)
             search_queue = list()
             search_queue.append(repository)
 
@@ -92,7 +92,10 @@ class PipelineBuilder:
                     return candidate
                 elif candidate.forks:
                     try:
-                        for fork in candidate.get_forks():
+                        candidate_forks = candidate.get_forks()
+                        logger.debug("Adding [%d] candidate forks for parent repository [%d] [%s] to the search queue",
+                                     len(candidate_forks), candidate.id, candidate.git_url)
+                        for fork in candidate_forks:
                             search_queue.append(fork)
                     except GithubException:
                         pass
