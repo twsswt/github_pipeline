@@ -24,8 +24,8 @@ class PipelineBuilder:
             self._source = FilteredGithubRepositories(self._source, repository_filter, github_repository_cache)
         return self
 
-    def replace_repositories(self, replacer):
-        self._source = ReplaceGithubRepositories(self._source, replacer)
+    def replace_repositories(self, replacer, replacement_cache_path=None):
+        self._source = ReplaceGithubRepositories(self._source, replacer, replacement_cache_path)
         return self
 
     def clone_or_pull(self, local_repositories_path='repositories'):
@@ -76,7 +76,7 @@ class PipelineBuilder:
 
         return self.replace_repositories(replace_fork_repository_with_original)
 
-    def replace_parents_with_fork(self, condition=lambda repository: True):
+    def replace_parents_with_fork(self, condition=lambda repository: True, replacement_cache_path=None):
 
         def find_matching_fork(repository: Repository):
             logger.debug("Looking for fork of repository [%d] [%s].", repository.id, repository.git_url)
@@ -93,16 +93,18 @@ class PipelineBuilder:
                 elif candidate.forks:
                     try:
                         candidate_forks = candidate.get_forks()
+
                         logger.debug("Adding [%d] candidate forks for parent repository [%d] [%s] to the search queue",
-                                     len(candidate_forks), candidate.id, candidate.git_url)
+                                     candidate_forks.totalCount, candidate.id, candidate.git_url)
                         for fork in candidate_forks:
                             search_queue.append(fork)
+
                     except GithubException:
                         pass
 
             return None
 
-        return self.replace_repositories(find_matching_fork)
+        return self.replace_repositories(find_matching_fork, replacement_cache_path)
 
     def execute(self):
         for _ in self._source:

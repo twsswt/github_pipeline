@@ -5,7 +5,7 @@ import random
 from github import GithubException
 
 from github_pipeline.api_wrapper import rate_limited_github_instance
-
+from github_pipeline.export import create_sql_table_descriptor, create_sql_table
 
 logger = logging.getLogger(__name__)
 
@@ -185,22 +185,45 @@ class FilteredGithubRepositories(AbstractGithubRepositories):
             return None
 
 
+_replacement_repository_cache_descriptor = \
+    create_sql_table_descriptor(
+        'ReplacementCache',
+        ['repository_id INT', 'replacement_id INT'],
+        ['repository_id'])
+
+
 class ReplaceGithubRepositories(AbstractGithubRepositories):
 
-    def __init__(self, source_repositories, repo_replacer: lambda repository: repository):
+    def __init__(self, source_repositories, repo_replacer: lambda repository: repository, replacement_cache_path=None):
         super().__init__()
-        self.source_iter = iter(source_repositories)
-        self.repo_replacer = repo_replacer
+        self._source_iter = iter(source_repositories)
+        self._repo_replacer = repo_replacer
+
+        self._replacement_cache = create_sql_table(replacement_cache_path, _replacement_repository_cache_descriptor) \
+            if replacement_cache_path else None
+
+        self._github_instance = rate_limited_github_instance()
 
     def _get_next_repository(self):
-        next_repository = next(self.source_iter)
-        logger.debug("Looking for matching replacement fork for [%d] [%s].",
+        next_repository = next(self._source_iter)
+        logger.debug('Looking for matching replacement fork for [%d] [%s].',
                      next_repository.id, next_repository.git_url)
 
-        replacement = self.repo_replacer(next_repository)
-        logger.debug("Replacing [%d] with [%d].", next_repository.id, replacement.id)
+        if self._replacement_cache and next_repository.id in self._replacement_cache:
+            replacement_id = self._replacement_cache[next_repository.id]['replacement_id']
+            logger.debug('Using cached replacement id [%d].', replacement_id)
+            replacement = self._github_instance.get_repo(replacement_id)
+        else:
+            replacement = self._repo_replacer(next_repository)
+            if self._replacement_cache:
+                self._replacement_cache[next_repository] = replacement.id
 
-        return replacement
+        if replacement:
+            logger.debug("Replacing [%d] with [%d].", next_repository.id, replacement.id)
+            return replacement
+        else:
+            logger.debug("No replacement found for [%d].", next_repository.id)
+            return next_repository
 
 
 class WriteToCacheGithubRepositories(AbstractGithubRepositories):
