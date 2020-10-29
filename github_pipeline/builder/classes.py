@@ -1,3 +1,5 @@
+import logging
+
 from github import GithubException, Repository
 
 from github_pipeline.sample import FilteredGithubRepositories, ReplaceGithubRepositories, \
@@ -5,6 +7,9 @@ from github_pipeline.sample import FilteredGithubRepositories, ReplaceGithubRepo
 
 from github_pipeline.analyse import CloneOrPullGithubRepositories, ExportGitHubRepositoryMetaData, \
     ClonkinAnalysisGithubRepositories
+
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineBuilder:
@@ -16,7 +21,7 @@ class PipelineBuilder:
             self._source = FilteredGithubRepositories(self._source, repository_filter)
         else:
             github_repository_cache = repository_status_cache(cache_file_path)
-            self._source = FilteredGithubRepositories(self._source, repository_filter, repository_status_cache())
+            self._source = FilteredGithubRepositories(self._source, repository_filter, github_repository_cache)
         return self
 
     def replace_repositories(self, replacer):
@@ -74,17 +79,23 @@ class PipelineBuilder:
     def replace_parents_with_fork(self, condition=lambda repository: True):
 
         def find_matching_fork(repository: Repository):
-            if repository.forks:
-                try:
-                    for fork in repository.get_forks():
-                        if condition(fork):
-                            return fork
-                        else:
-                            fork_result = find_matching_fork(fork)
-                            if fork_result:
-                                return fork_result
-                except GithubException:
-                    pass
+
+            search_queue = list()
+            search_queue.append(repository)
+
+            while len(search_queue) > 0:
+                candidate = search_queue.pop(0)
+                logger.debug("Testing candidate for replacement of parent [%d] [%s].",
+                             candidate.id, candidate.git_url)
+
+                if condition(candidate):
+                    return candidate
+                elif candidate.forks:
+                    try:
+                        for fork in candidate.get_forks():
+                            search_queue.append(fork)
+                    except GithubException:
+                        pass
 
             return None
 

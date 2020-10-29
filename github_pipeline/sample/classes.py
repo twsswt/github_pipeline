@@ -72,6 +72,7 @@ class CachedGithubRepositories(AbstractGithubRepositories):
         try:
             while True:
                 repository_id = self.repository_ids[self.index]
+                self.index += 1
                 if self.repository_cache[repository_id]['status'] == 'Match':
                     try:
                         return self.github_instance.get_repo(repository_id)
@@ -81,7 +82,6 @@ class CachedGithubRepositories(AbstractGithubRepositories):
                 else:
                     reason = self.repository_cache[repository_id]['status']
                     logger.debug("Skipping repository [%d], due to [%s].", repository_id, reason)
-                self.index += 1
 
 
         except IndexError:
