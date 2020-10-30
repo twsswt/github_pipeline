@@ -216,7 +216,7 @@ class ReplaceGithubRepositories(AbstractGithubRepositories):
         else:
             replacement = self._repo_replacer(next_repository)
             if self._replacement_cache:
-                self._replacement_cache[next_repository] = replacement.id
+                self._replacement_cache[next_repository.id] = replacement.id
 
         if replacement:
             logger.debug("Replacing [%d] with [%d].", next_repository.id, replacement.id)

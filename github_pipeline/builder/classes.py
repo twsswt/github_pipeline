@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class PipelineBuilder:
-    
+
     def __init__(self, source):
         self._source = source
 
