@@ -6,7 +6,7 @@ from github_pipeline.sample import FilteredGithubRepositories, ReplaceGithubRepo
     WriteToCacheGithubRepositories, repository_status_cache
 
 from github_pipeline.analyse import CloneOrPullGithubRepositories, ExportGitHubRepositoryMetaData, \
-    ClonkinAnalysisGithubRepositories
+    ClonkinAnalysisGithubRepositories, RemoveLocalRepositories
 
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,17 @@ class PipelineBuilder:
         self._source = ReplaceGithubRepositories(self._source, replacer, replacement_cache_path)
         return self
 
-    def clone_or_pull(self, local_repositories_path='repositories'):
-        self._source = CloneOrPullGithubRepositories(self._source, local_repositories_path)
+    def clone_or_pull(self, local_repositories_path='repositories', excluded_repository_cache_path=None):
+        if excluded_repository_cache_path:
+            excluded_repository_cache = repository_status_cache(excluded_repository_cache_path)
+            self._source = CloneOrPullGithubRepositories(
+                self._source, local_repositories_path, excluded_repository_cache)
+        else:
+            self._source = CloneOrPullGithubRepositories(self._source, local_repositories_path)
+        return self
+
+    def remove_local_repositories(self, local_repository_path='repositories'):
+        self._source = RemoveLocalRepositories(self._source, local_repository_path)
         return self
 
     def export_github_repository_metadata(

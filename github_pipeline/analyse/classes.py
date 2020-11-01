@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 
 from pathlib import Path
 
@@ -39,18 +40,25 @@ def _guess_default_branch(github_repository, local_repository):
 
 class CloneOrPullGithubRepositories(AbstractGithubRepositories):
 
-    def __init__(self, source_repositories, repositories_path):
+    def __init__(self, source_repositories, repositories_path, excluded_repository_cache=None):
         super().__init__()
         self.source_iter = iter(source_repositories)
         self.repositories_path = repositories_path
 
+        self._excluded_repository_cache = excluded_repository_cache
+
     def _get_next_repository(self):
         next_repository = next(self.source_iter)
-        try:
-            self._clone_or_pull_git_repository(next_repository)
-        except Exception:
-            logger.warning("Error when synchronizing repository [%d] [%s].",
-                           next_repository.id, next_repository.git_url, exc_info=True)
+        if self._excluded_repository_cache and next_repository.id in self._excluded_repository_cache:
+            logger.info('Skipping local update of repository [%d] [%s].', next_repository.id, next_repository.git_url)
+        else:
+            logger.info('Attempting local update of repository [%d] [%s].', next_repository.id, next_repository.git_url)
+            try:
+                self._clone_or_pull_git_repository(next_repository)
+            except Exception:
+                logger.warning("Error when synchronizing repository [%d] [%s].",
+                               next_repository.id, next_repository.git_url, exc_info=True)
+
         return next_repository
 
     def _clone_or_pull_git_repository(self, github_repository):
@@ -70,6 +78,28 @@ class CloneOrPullGithubRepositories(AbstractGithubRepositories):
             logger.info("Cloning [%s].", str(local_path))
             makedirs(local_path.parent, exist_ok=True)
             git_instance.execute(['git', 'clone', github_repository.git_url, str(local_path)])
+
+
+class RemoveLocalRepositories(AbstractGithubRepositories):
+
+    def __init__(self, source_repositories, local_repository_path):
+        super().__init__()
+        self._local_repositories_path = local_repository_path
+        self.source_iter = iter(source_repositories)
+
+    def _get_next_repository(self):
+        next_repository = next(self.source_iter)
+        self._remove_local_repository(next_repository)
+        return next_repository
+
+    def _remove_local_repository(self, github_repository):
+
+        local_path = Path(self._local_repositories_path + urlparse(github_repository.git_url).path)
+        if local_path.exists():
+            logger.info("Removing repository [%d] [%s].", github_repository.id, local_path)
+            shutil.rmtree(local_path, ignore_errors=True)
+        else:
+            logger.warning("Didn't find repository to remove [%d] [%s].", github_repository.id, local_path)
 
 
 def _handle_for_file_rename_key_format(key):
@@ -238,7 +268,12 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
         return next_repository
 
     def _perform_analysis(self, next_repository):
+
         local_repository_path = self.local_repositories_path + urlparse(next_repository.git_url).path
+        if not Path(local_repository_path).is_dir():
+            logger.info("Skipping analysis of missing repository [%d] [%s]",
+                        next_repository.id, next_repository.git_url)
+            return
 
         git_repository = Repo(local_repository_path)
         default_branch = _guess_default_branch(next_repository, git_repository)
