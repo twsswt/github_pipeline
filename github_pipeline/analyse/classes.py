@@ -54,7 +54,7 @@ class CloneOrPullGithubRepositories(AbstractGithubRepositories):
         else:
             logger.info('Attempting local update of repository [%d] [%s].', next_repository.id, next_repository.git_url)
             try:
-                self._clone_or_pull_git_repository(next_repository)
+                pass  # self._clone_or_pull_git_repository(next_repository)
             except Exception:
                 logger.warning("Error when synchronizing repository [%d] [%s].",
                                next_repository.id, next_repository.git_url, exc_info=True)
@@ -173,11 +173,19 @@ clonkin_analysis_table_descriptor = create_sql_table_descriptor(
 )
 
 
+def _default_path_filter(path):
+    return path.is_file() and 'src-min' not in str(path) and \
+           not str(path).endswith('.dts') and \
+           not str(path).endswith('.dtsi') and \
+           path.stat().st_size < 5 * 1024 * 1024
+
+
 class _CachingPygountAnalyser:
 
-    def __init__(self, local_repository_path):
+    def __init__(self, local_repository_path, path_filter=_default_path_filter):
         self._local_repository_path = local_repository_path
         self.current_file_line_count = dict()
+        self.path_filter = path_filter
 
     def perform_analysis(self, changed_repository_paths):
 
@@ -191,7 +199,7 @@ class _CachingPygountAnalyser:
 
         for path_to_analyse in paths_to_analyse:
 
-            if path_to_analyse.is_file() and 'src-min' not in str(path_to_analyse):
+            if self.path_filter(path_to_analyse):
                 pygcount_project_summary = ProjectSummary()
                 source_analysis = SourceAnalysis.from_file(str(path_to_analyse), '')
                 pygcount_project_summary.add(source_analysis)
