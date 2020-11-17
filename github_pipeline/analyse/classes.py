@@ -54,7 +54,7 @@ class CloneOrPullGithubRepositories(AbstractGithubRepositories):
         else:
             logger.info('Attempting local update of repository [%d] [%s].', next_repository.id, next_repository.git_url)
             try:
-                pass  # self._clone_or_pull_git_repository(next_repository)
+                self._clone_or_pull_git_repository(next_repository)
             except Exception:
                 logger.warning("Error when synchronizing repository [%d] [%s].",
                                next_repository.id, next_repository.git_url, exc_info=True)
