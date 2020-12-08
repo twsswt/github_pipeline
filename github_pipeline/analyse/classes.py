@@ -31,8 +31,16 @@ logger = logging.getLogger(__name__)
 
 
 def _guess_default_branch(github_repository, local_repository):
+
+    try:
+        heads = list(local_repository.heads)
+    except UnicodeDecodeError:
+        logger.warning("Couldn't decode branch names for [%d]", github_repository.id)
+        return None
+
     candidates = \
-        [github_repository.default_branch, 'master', 'main', 'develop', 'dev', list(local_repository.heads)[0].name]
+        [github_repository.default_branch, 'master', 'main', 'develop', 'dev', heads[0].name]
+
     for candidate in candidates:
         if candidate in local_repository.heads:
             return candidate
@@ -70,6 +78,11 @@ class CloneOrPullGithubRepositories(AbstractGithubRepositories):
             repo = Repo(local_path)
             logger.info("Repository [%s] already exists, pulling.", str(local_path))
             default_branch = _guess_default_branch(github_repository, repo)
+
+            if not default_branch:
+                logger.warning("Couldn't pull - couldn't determine default branch.")
+                return
+
             repo.heads[default_branch].checkout()
             repo.remote('origin').pull()
             return
@@ -284,7 +297,13 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
             return
 
         git_repository = Repo(local_repository_path)
+
         default_branch = _guess_default_branch(next_repository, git_repository)
+
+        if not default_branch:
+            logger.warning("Couldn't perform Clonkin analysis - couldn't determine default branch.")
+            return
+
         commits = get_commits_on_branch(git_repository, branch_names=[default_branch], limit=self.commit_limit)
         logging.info("[%d] commits found.", len(commits))
 
@@ -360,7 +379,12 @@ class ExportGitHubRepositoryMetaData(AbstractGithubRepositories):
         local_repository_path = self.local_repositories_path + urlparse(github_repository.git_url).path
         git_repository = Repo(local_repository_path)
         default_branch = _guess_default_branch(github_repository, git_repository)
-        commits = get_commits_on_branch(git_repository, branch_names=[default_branch])
+
+        if not default_branch:
+            logger.warning("Couldn't get commit data - couldn't determine default branch.")
+            commits = None
+        else:
+            commits = get_commits_on_branch(git_repository, branch_names=[default_branch])
 
         data_values = (
             github_repository.name,
@@ -371,10 +395,10 @@ class ExportGitHubRepositoryMetaData(AbstractGithubRepositories):
 
             github_repository.get_contributors().totalCount,
 
-            commits[0].hexsha,
-            len(commits),
-            commits[-1].authored_date,
-            commits[0].authored_date,
+            commits[0].hexsha if commits else None,
+            len(commits) if commits else None,
+            commits[-1].authored_date if commits else None,
+            commits[0].authored_date if commits else None,
 
             github_repository.get_issues(state='all').totalCount,
             github_repository.open_issues_count,
