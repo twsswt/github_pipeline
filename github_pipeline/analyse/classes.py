@@ -1,5 +1,8 @@
 import logging
 import os
+import sqlite3
+
+import pandas as pd
 import shutil
 
 from pathlib import Path
@@ -14,12 +17,6 @@ from pygount import ProjectSummary, SourceAnalysis
 
 from clonkin.progress_tracker import ProgressTracker
 from clonkin.gherkin_project import gherkin_project_from_paths
-
-from clonkin.gherkin.aaa_violations import reporter as aaa_violations_reporter
-from clonkin.gherkin.clones import reporter as clone_reporter
-from clonkin.gherkin.lazy_scenario_outlines import reporter as lazy_outlines_reporter
-from clonkin.gherkin.lazy_step_examples import reporter as lazy_steps_reporter
-from clonkin.gherkin.project import reporter as project_reporter
 
 from github_pipeline.sample.classes import AbstractGithubRepositories
 from .git_view import GitAtCommit, get_commits_on_branch
@@ -151,41 +148,6 @@ def _feature_files_are_in_change_set(changed_file_paths):
     return False
 
 
-clonkin_analysis_table_descriptor = create_sql_table_descriptor(
-    table_name="ClonkinAnalysisGitHubRepositories",
-    columns=[
-        "repository_id INT",
-        "commit_hexsha TEXT",
-        "commit_date INT",
-
-        "lines_count INT",
-
-        "gherkin_files_count INT",
-        "unparsed_files_count INT",
-        "empty_files_count INT",
-
-        "features_count INT",
-        "scenarios_count INT",
-        "backgrounds_count INT",
-
-        "given_count INT",
-        "when_count INT",
-        "then_count INT",
-        "steps_count INT",
-
-        "clones_count INT",
-        "clone_lines_count INT",
-        "clone_rate REAL",
-
-        "aaa_violations_count INT",
-
-        "lazy_outlines_table_count INT",
-        "lazy_step_examples_count INT"
-    ],
-    primary_keys=['repository_id', 'commit_hexsha'],
-)
-
-
 def _default_path_filter(path):
     return path.is_file() and 'src-min' not in str(path) and \
            not str(path).endswith('.dts') and \
@@ -193,22 +155,25 @@ def _default_path_filter(path):
            path.stat().st_size < 5 * 1024 * 1024
 
 
-class _CachingPygountAnalyser:
+class CachingPygountAnalyser:
 
-    def __init__(self, local_repository_path, path_filter=_default_path_filter):
-        self._local_repository_path = local_repository_path
+    def __init__(self, path_filter=_default_path_filter):
         self.current_file_line_count = dict()
         self.path_filter = path_filter
 
-    def perform_analysis(self, changed_repository_paths):
+    @property
+    def project_report_column_labels(self):
+        return ['lines_count']
 
-        new_paths = set(Path(self._local_repository_path).rglob("*")) - set(self.current_file_line_count.keys())
+    def perform_analysis(self, local_repository_path, changed_repository_paths):
+
+        new_paths = set(Path(local_repository_path).rglob("*")) - set(self.current_file_line_count.keys())
         logging.debug("Found [%d] new paths", len(new_paths))
-        changed_paths = set(Path(self._local_repository_path + os.sep + path) for path in changed_repository_paths)
+        changed_paths = set(Path(local_repository_path + os.sep + path) for path in changed_repository_paths)
         paths_to_analyse = new_paths | changed_paths
 
         logger.info("Starting pygount analysis on [%d] source paths in [%s].",
-                    len(paths_to_analyse), self._local_repository_path)
+                    len(paths_to_analyse), local_repository_path)
 
         for path_to_analyse in paths_to_analyse:
 
@@ -223,20 +188,27 @@ class _CachingPygountAnalyser:
         return sum(self.current_file_line_count.values()),
 
 
-class _CachingClonkinAnalyser:
+class CachingClonkinAnalyser:
 
-    def __init__(self, local_repository_path, gherkin_reporters, brute_clonkin):
-        self._local_repository_path = local_repository_path
+    def __init__(self, gherkin_reporters, brute_clonkin):
         self._gherkin_reporters = gherkin_reporters
-        self._last_clonkin_values = (0, ) * 16
         self._brute_clonkin = brute_clonkin
 
-    def perform_analysis(self, changed_repository_paths):
+        self._last_clonkin_values = (0, ) * len(self.project_report_column_labels)
+
+    @property
+    def project_report_column_labels(self):
+        result = list()
+        for gherkin_reporter in self._gherkin_reporters:
+            result += gherkin_reporter.project_column_headers
+        return result
+
+    def perform_analysis(self, local_repository_path, changed_repository_paths):
 
         if _feature_files_are_in_change_set(changed_repository_paths) or self._brute_clonkin:
 
-            logger.info("Starting clonkin analysis on [%s].", self._local_repository_path)
-            feature_file_paths = list(Path(self._local_repository_path).rglob("*.feature"))
+            logger.info("Starting clonkin analysis on [%s].", local_repository_path)
+            feature_file_paths = list(Path(local_repository_path).rglob("*.feature"))
             gherkin_project = gherkin_project_from_paths(feature_file_paths)
 
             for reporter in self._gherkin_reporters:
@@ -258,25 +230,25 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
                  source_repositories,
                  local_repositories_path,
                  database_path,
-                 commit_limit=1,
-                 brute_clonkin=False):
+                 analysers,
+                 commit_limit=1):
 
         super().__init__()
 
         self.source_iter = iter(source_repositories)
         self.local_repositories_path = local_repositories_path
+        self._db_connection = sqlite3.connect(database_path)
 
-        self.database_table = create_sql_table(database_path, clonkin_analysis_table_descriptor)
-
-        self._gherkin_reporters = [
-            project_reporter(),
-            clone_reporter(),
-            aaa_violations_reporter(),
-            lazy_outlines_reporter(),
-            lazy_steps_reporter()]
+        self._analyzers = analysers
 
         self.commit_limit = commit_limit
-        self.brute_clonkin = brute_clonkin
+
+    @property
+    def project_report_column_labels(self):
+        result = ['repository_id', 'commit_hexsha', 'commit_date']
+        for analyzer in self._analyzers:
+            result += analyzer.project_report_column_labels
+        return result
 
     def _get_next_repository(self):
         next_repository = next(self.source_iter)
@@ -287,6 +259,19 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
             logger.warning("Couldn't do clonkin analysis on repository [%s]", next_repository.name, exc_info=True)
 
         return next_repository
+
+    def _commit_in_database(self, repository_id, commit_hexsha):
+        try:
+            data = pd.read_sql_query(
+                f"""
+                SELECT repository_id, commit_hexsha
+                FROM ClonkinAnalysisGithubRepositories
+                WHERE repository_id={repository_id} AND commit_hexsha='{commit_hexsha}'
+                """, self._db_connection)
+
+            return len(data) > 0
+        except pd.io.sql.DatabaseError:
+            return False
 
     def _perform_analysis(self, next_repository):
 
@@ -309,21 +294,19 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
 
         progress_tracker = ProgressTracker(len(commits), object_type_name='commits')
 
-        clonkin_analyser = _CachingClonkinAnalyser(local_repository_path, self._gherkin_reporters, self.brute_clonkin)
-        caching_pygount_analyser = _CachingPygountAnalyser(local_repository_path)
-
         for commit in reversed(commits):
-            if (next_repository.id, commit.hexsha) not in self.database_table:
+            if not self._commit_in_database(next_repository.id, commit.hexsha):
 
                 changed_file_paths = _get_files_changed_in_commit(commit)
                 logger.info("Checking out commit [%s]." % commit.hexsha)
                 with GitAtCommit(git_repository, commit):
-                    data_values = (commit.authored_date, )
+                    data_values = (next_repository.id, commit.hexsha, commit.authored_date)
 
-                    data_values += caching_pygount_analyser.perform_analysis(changed_file_paths)
-                    data_values += clonkin_analyser.perform_analysis(changed_file_paths)
+                    for analyzer in self._analyzers:
+                        data_values += analyzer.perform_analysis(local_repository_path, changed_file_paths)
 
-                self.database_table[(next_repository.id, commit.hexsha)] = data_values
+                    data_frame = pd.DataFrame(data=[data_values], columns=self.project_report_column_labels)
+                    data_frame.to_sql("ClonkinAnalysisGitHubRepositories", self._db_connection, if_exists='append')
 
             progress_tracker.processed_object()
 

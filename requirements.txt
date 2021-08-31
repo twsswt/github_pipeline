@@ -1,4 +1,5 @@
-clonkin
 PyGithub
+clonkin
 git-python
+pandas
 pygount
