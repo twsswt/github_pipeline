@@ -230,8 +230,8 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
                  source_repositories,
                  local_repositories_path,
                  database_path,
-                 analysers,
-                 basic_commit_data,
+                 commit_data,
+                 local_repository_analysers,
                  commit_limit=1):
 
         super().__init__()
@@ -240,14 +240,15 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
         self.local_repositories_path = local_repositories_path
         self._db_connection = sqlite3.connect(database_path)
 
-        self._analyzers = analysers
+        self._commit_data = commit_data
+        self._analyzers = local_repository_analysers
 
-        self.basic_commit_date = basic_commit_data
         self.commit_limit = commit_limit
 
     @property
     def project_report_column_labels(self):
-        result = ['repository_id', 'commit_hexsha', 'commit_date']
+        result = ['repository_id', 'commit_hexsha']
+        result += [t[0] for t in self._commit_data]
         for analyzer in self._analyzers:
             result += analyzer.project_report_column_labels
         return result
@@ -302,11 +303,14 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
                 changed_file_paths = _get_files_changed_in_commit(commit)
                 logger.info("Checking out commit [%s]." % commit.hexsha)
                 with GitAtCommit(git_repository, commit):
-                    data_values = self.basic_commit_data(next_repository, commit)
+                    data_values = [next_repository.id, commit.hexsha]
+
+                    for t in self._commit_data:
+                        data_values.append(t[1](commit))
 
                     for analyzer in self._analyzers:
                         data_values += analyzer.perform_analysis(local_repository_path, changed_file_paths)
-
+                    print(data_values)
                     data_frame = pd.DataFrame(data=[data_values], columns=self.project_report_column_labels)
                     data_frame.to_sql("ClonkinAnalysisGitHubRepositories", self._db_connection, if_exists='append')
 

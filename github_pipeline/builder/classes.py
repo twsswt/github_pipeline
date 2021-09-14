@@ -54,12 +54,14 @@ class PipelineBuilder:
             self,
             local_repositories_path='repositories',
             database_path='clonkin.db',
-            analysers=(),
-            basic_commit_data=lambda repository, commit: (repository.id, commit.hexsha, commit.authored_date),
+            local_repository_analysers=(),
+            commit_data=(
+                ('commit_date', lambda commit: commit.authored_date),
+            ),
             commit_limit=None):
 
         self._source = ClonkinAnalysisGithubRepositories(
-            self._source, local_repositories_path, database_path, analysers, basic_commit_data, commit_limit)
+            self._source, local_repositories_path, database_path, commit_data, local_repository_analysers, commit_limit)
         return self
 
     def write_to_cache(self, cache_file_path):
