@@ -231,6 +231,7 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
                  local_repositories_path,
                  database_path,
                  analysers,
+                 basic_commit_data,
                  commit_limit=1):
 
         super().__init__()
@@ -241,6 +242,7 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
 
         self._analyzers = analysers
 
+        self.basic_commit_date = basic_commit_data
         self.commit_limit = commit_limit
 
     @property
@@ -300,7 +302,7 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
                 changed_file_paths = _get_files_changed_in_commit(commit)
                 logger.info("Checking out commit [%s]." % commit.hexsha)
                 with GitAtCommit(git_repository, commit):
-                    data_values = (next_repository.id, commit.hexsha, commit.authored_date)
+                    data_values = self.basic_commit_data(next_repository, commit)
 
                     for analyzer in self._analyzers:
                         data_values += analyzer.perform_analysis(local_repository_path, changed_file_paths)
