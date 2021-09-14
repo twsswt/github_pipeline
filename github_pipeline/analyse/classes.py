@@ -310,7 +310,6 @@ class ClonkinAnalysisGithubRepositories(AbstractGithubRepositories):
 
                     for analyzer in self._analyzers:
                         data_values += analyzer.perform_analysis(local_repository_path, changed_file_paths)
-                    print(data_values)
                     data_frame = pd.DataFrame(data=[data_values], columns=self.project_report_column_labels)
                     data_frame.to_sql("ClonkinAnalysisGitHubRepositories", self._db_connection, if_exists='append')
 
